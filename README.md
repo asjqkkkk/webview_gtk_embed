@@ -1,18 +1,35 @@
 # webview_gtk_embed
 
-A new Flutter plugin project.
+GTK/WebKitGTK based WebView for Flutter desktop on Linux. The plugin exposes a `GtkWebView` widget and
+`WebviewGtkEmbedController` that wrap a native WebKitGTK instance embedded via Flutter platform views.
 
-## Getting Started
+## Features
 
-This project is a starting point for a Flutter
-[plug-in package](https://flutter.dev/to/develop-plugins),
-a specialized package that includes platform-specific implementation code for
-Android and/or iOS.
+- Seamless embedding of WebKitGTK inside Flutter layouts.
+- JavaScript evaluation and return values.
+- Bidirectional messaging via JavaScript channels (`window.<channel>.postMessage`).
+- Navigation helpers (load URL, reload, go back/forward) and basic settings like background color.
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+## Usage
 
-The plugin project was generated without specifying the `--platforms` flag, no platforms are currently supported.
-To add platforms, run `flutter create -t plugin --platforms <platforms> .` in this directory.
-You can also find a detailed instruction on how to add platforms in the `pubspec.yaml` at https://flutter.dev/to/pubspec-plugin-platforms.
+```dart
+final controller = WebviewGtkEmbedController(
+  initialUrl: 'https://flutter.dev',
+  javascriptChannelNames: const {'FlutterChannel'},
+);
+
+GtkWebView(
+  controller: controller,
+  onJavascriptMessage: (channel, message) {
+    debugPrint('[$channel] $message');
+  },
+);
+```
+
+To send a message from JavaScript:
+
+```javascript
+window.FlutterChannel.postMessage('hello from the page');
+```
+
+See the example application for a full demo showcasing navigation, inline HTML, and messaging.

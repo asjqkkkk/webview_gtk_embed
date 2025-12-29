@@ -1,7 +1,4 @@
 import 'package:flutter/material.dart';
-import 'dart:async';
-
-import 'package:flutter/services.dart';
 import 'package:webview_gtk_embed/webview_gtk_embed.dart';
 
 void main() {
@@ -16,35 +13,44 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
-  String _platformVersion = 'Unknown';
-  final _webviewGtkEmbedPlugin = WebviewGtkEmbed();
+  final WebviewGtkEmbedController _controller = WebviewGtkEmbedController(
+    initialUrl: 'https://flutter.dev',
+    javascriptChannelNames: const {'FlutterChannel'},
+  );
+  String _lastMessage = 'No message yet';
+  String _status = 'Idle';
+  bool _webViewReady = false;
 
-  @override
-  void initState() {
-    super.initState();
-    initPlatformState();
+  Future<void> _loadFlutterSite() async {
+    if (!_webViewReady) return;
+    await _controller.loadUrl('https://flutter.dev');
+    setState(() => _status = 'Loading flutter.dev...');
   }
 
-  // Platform messages are asynchronous, so we initialize in an async method.
-  Future<void> initPlatformState() async {
-    String platformVersion;
-    // Platform messages may fail, so we use a try/catch PlatformException.
-    // We also handle the message potentially returning null.
-    try {
-      platformVersion =
-          await _webviewGtkEmbedPlugin.getPlatformVersion() ?? 'Unknown platform version';
-    } on PlatformException {
-      platformVersion = 'Failed to get platform version.';
-    }
+  Future<void> _loadInlinePage() async {
+    if (!_webViewReady) return;
+    const script = r"""
+document.body.innerHTML = '<h1>Inline WebView</h1><button id="send">Send message</button>';
+document.getElementById('send').addEventListener('click', function() {
+  window.FlutterChannel.postMessage('Hi from WebKit');
+});
+""";
+    await _controller.runJavascript(
+        "document.open();document.write('<html><body></body></html>');document.close();");
+    await _controller.runJavascript(script);
+    setState(() => _status = 'Custom HTML injected');
+  }
 
-    // If the widget was removed from the tree while the asynchronous platform
-    // message was in flight, we want to discard the reply rather than calling
-    // setState to update our non-existent appearance.
-    if (!mounted) return;
+  Future<void> _sendMessageToPage() async {
+    if (!_webViewReady) return;
+    await _controller.runJavascript(
+        "window.FlutterChannel.postMessage('Ping from Flutter ${DateTime.now().toIso8601String()}')");
+  }
 
-    setState(() {
-      _platformVersion = platformVersion;
-    });
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
   }
 
   @override
@@ -52,10 +58,59 @@ class _MyAppState extends State<MyApp> {
     return MaterialApp(
       home: Scaffold(
         appBar: AppBar(
-          title: const Text('Plugin example app'),
+          title: const Text('Webview GTK Embed demo'),
         ),
-        body: Center(
-          child: Text('Running on: $_platformVersion\n'),
+        body: Column(
+          children: <Widget>[
+            Padding(
+              padding: const EdgeInsets.all(8),
+              child: Text('Status: $_status'),
+            ),
+            Expanded(
+              child: GtkWebView(
+                controller: _controller,
+                onWebViewCreated: (controller) {
+                  setState(() {
+                    _webViewReady = true;
+                    _status = 'WebView ready';
+                  });
+                },
+                onJavascriptMessage: (channel, message) {
+                  setState(() {
+                    _lastMessage = '[$channel] $message';
+                  });
+                },
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text('Last JavaScript message: $_lastMessage'),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    children: <Widget>[
+                      ElevatedButton(
+                        onPressed: _loadFlutterSite,
+                        child: const Text('Load flutter.dev'),
+                      ),
+                      ElevatedButton(
+                        onPressed: _loadInlinePage,
+                        child: const Text('Load inline HTML'),
+                      ),
+                      ElevatedButton(
+                        onPressed: _sendMessageToPage,
+                        child: const Text('Ping JS'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );
